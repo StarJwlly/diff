@@ -15,7 +15,7 @@ main = do
   let notesLine = tail $ snd $ Prelude.break ("[HitObjects]"==) timingsLine
   --putStrLn $ show $ getTimingPoints timingsLine
   --putStrLn $ show $ readHitObjects notesLine 10
-  putStrLn $ show $ getDistances (readHitObjects notesLine 10) $ Data.List.replicate 10 (Nothing, Nothing)
+  putStrLn $ show $ getDistances (readHitObjects notesLine 10) 0 $ Data.List.replicate 10 (-1, -1)
   
   
 
@@ -82,14 +82,10 @@ toChord hitObjects releases tim = let r = unzip result in (Chord tim (fst r), sn
         
 
 
---gurdar qnd for hold?
-getDistances :: [Chord] -> [(Maybe (Note, Int), Maybe (Note, Int))] -> [[(Maybe (Note, Int), (Maybe (Note, Int)))]]
-getDistances [] _ = []
-getDistances ((Chord time notes) : next) lasts = result : rest
-  where result = Data.List.map (\(x, y) -> (dist x, dist y)) lasts
-        rest = (getDistances next　$ Data.List.map (\(x, (ya, yb)) -> case x of
-                                                             Nothing       -> (ya, yb)
-                                                             Just HoldNote -> (ya, yb)
-                                                             Just n        -> (Just (n, time), ya)) (Data.List.zip notes lasts))
-  　　    dist y | y == Nothing = Nothing
-               | otherwise    = let (Just (ys, t)) = y in Just (ys, time - t)
+getDistances :: [Chord] -> Int -> [(Int, Int)] -> [[(Int, Int)]]
+getDistances [] _ _ = []
+getDistances ((Chord time notes) : next) i lasts = lasts : rest
+  where rest = (getDistances next (i + 1)　$ Data.List.map (\(x, (ya, yb)) -> case x of
+                                                                               Nothing       -> (ya, yb)
+                                                                               Just HoldNote -> (ya, yb)
+                                                                               Just n        -> (i, ya)) (Data.List.zip notes lasts))
