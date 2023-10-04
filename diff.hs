@@ -18,14 +18,22 @@ main = do
   let timingPoints = getTimingPoints timingsLine
   let notesLine = tail $ snd $ Prelude.break ("[HitObjects]"==) timingsLine
   let chords = readHitObjects notesLine 10
+  let chords2 = splitChord 10 chords
   let diffFunctionArgs = getDiffFunctionArgs 0 $ Data.List.lines diffContents
-  let dists = getDistances chords 0 (Data.List.replicate 10 (-1, -1))
+  let distsL = getDistances (fst chords2) 0 (Data.List.replicate 5 (-1, -1))
+  let distsR = getDistances (snd chords2) 0 (Data.List.replicate 5 (-1, -1))
   
-  putStrLn $ show $ getDiff diffFunctionArgs chords dists 0
+  putStrLn $ show $ getDiff diffFunctionArgs (fst chords2) distsL 0
+  putStrLn $ show $ getDiff diffFunctionArgs (snd chords2) distsR 0
   
   
   --putStrLn $ show $ getTimingPoints timingsLine
   --putStrLn $ show $ readHitObjects notesLine 10
+
+splitChord :: Int -> [Chord] -> ([Chord], [Chord])
+splitChord key chords = Data.List.unzip $ Data.List.map (\x -> let (t, (y1, y2)) = (time x, (Prelude.splitAt half $ notes x)) in (Chord t (reverse (if mod key 2 == 0 then y1 else Nothing : y1)), Chord t y2)) chords
+  where half = div key 2
+        reverse a = Prelude.foldl (\x y -> y : x) [] a
 
 getDiffFunctionArgs :: Int -> [String] -> [[(Double, Double, Double)]]
 getDiffFunctionArgs _ [] = []
