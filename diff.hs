@@ -19,12 +19,17 @@ main = do
   let notesLine = tail $ snd $ Prelude.break ("[HitObjects]"==) timingsLine
   let chords = readHitObjects notesLine 10
   let chords2 = splitChord 10 chords
-  let diffFunctionArgs = getDiffFunctionArgs 0 $ Data.List.lines diffContents
+  let diffLines = Data.List.lines diffContents
+  let hitHitDiffArgs = getDiffFunctionArgs 0 $ tail $ snd $ Prelude.break ("[hithit]"==) diffLines
+  let hitRelDiffArgs = getDiffFunctionArgs 0 $ tail $ snd $ Prelude.break ("[hitrel]"==) diffLines
+  let relHitDiffArgs = getDiffFunctionArgs 0 $ tail $ snd $ Prelude.break ("[relhit]"==) diffLines
+  let relRelDiffArgs = getDiffFunctionArgs 0 $ tail $ snd $ Prelude.break ("[relrel]"==) diffLines
+  let holdDiffArgs = getDiffFunctionArgs 0 $ tail $ snd $ Prelude.break ("[hold]"==) diffLines
   let distsL = getDistances (fst chords2) 0 (Data.List.replicate 5 (-1, -1))
   let distsR = getDistances (snd chords2) 0 (Data.List.replicate 5 (-1, -1))
   
-  putStrLn $ show $ getDiff diffFunctionArgs (fst chords2) distsL 0
-  putStrLn $ show $ getDiff diffFunctionArgs (snd chords2) distsR 0
+  putStrLn $ show $ getDiff (hitHitDiffArgs, hitRelDiffArgs, relHitDiffArgs, relRelDiffArgs, holdDiffArgs) (fst chords2) distsL 0
+  putStrLn $ show $ getDiff (hitHitDiffArgs, hitRelDiffArgs, relHitDiffArgs, relRelDiffArgs, holdDiffArgs) (snd chords2) distsR 0
   
   
   --putStrLn $ show $ getTimingPoints timingsLine
@@ -37,7 +42,8 @@ splitChord key chords = Data.List.unzip $ Data.List.map (\x -> let (t, (y1, y2))
 
 getDiffFunctionArgs :: Int -> [String] -> [[(Double, Double, Double)]]
 getDiffFunctionArgs _ [] = []
-getDiffFunctionArgs i (s:ss) = curr : (getDiffFunctionArgs (i + 1) ss)
+getDiffFunctionArgs i (s:ss) | s == ""   = []
+                             | otherwise = curr : (getDiffFunctionArgs (i + 1) ss)
   where curr = Data.List.map (\x -> let temp = Data.List.map read $ Data.List.words x :: [Double] in (temp !! 0, temp !! 1, temp !! 2)) $ splitOnDelimiter s "|"
 
 riceFunc :: Double -> Double -> Double -> Int -> Int
@@ -120,25 +126,33 @@ getDistances ((Chord time notes) : next) i lasts = (i, lasts) : rest
                                                                                Just n        -> (i, ya)) (Data.List.zip notes lasts))
 
 
-getDiff :: [[(Double, Double, Double)]] -> [Chord] -> [(Int, [(Int, Int)])] -> Int -> [[[Int]]]
+getDiff :: ([[(Double, Double, Double)]], [[(Double, Double, Double)]], [[(Double, Double, Double)]], [[(Double, Double, Double)]], [[(Double, Double, Double)]]) -> [Chord] -> [(Int, [(Int, Int)])] -> Int -> [([[Int]], [[Double]])]
 getDiff _ _ [] _ = []
-getDiff args chords ((curr, di):sts) threshold = (Data.List.map (\x -> case x of
-                                                                            Just y -> diffs y
-                                                                            Nothing -> []) getNotes) : getDiff args chords sts threshold
+getDiff (hitHitArgs, hitRelArgs, relHitArgs, relRelArgs, holdArgs) chords ((curr, di):sts) threshold = ((getNotesDiff $ fst hitReleasesHolds), (getHoldDiff hitReleasesHolds)) : (getDiff (hitHitArgs, hitRelArgs, relHitArgs, relRelArgs, holdArgs) chords sts threshold)
   where currChord = chords !! curr
-        getNotes = fst $ Data.List.foldl (\(x, c) y -> case y of
-          Just ReleaseNote -> (x ++ [Just c], c + 1)
-          Just HitNote -> (x ++ [Just c], c + 1)
-          otherwise -> (x ++ [Nothing], c + 1)
-            ) ([], 0) $ notes currChord 
-        diffs c1 = let r = Data.List.foldl (\(x, c) (y, ys) -> if y < 0 then (x ++ [0], c + 1)
-                                                                        else if c == c1
-                                                                               then (x ++ [applyJack (args !! c1 !! c) $ distms y], c + 1)
-                                                                               else let d = distms y in
-                                                                                 if d >= threshold then (x ++ [applyRice (args !! c1 !! c) d], c + 1)
-                                                                                                   else if ys < 0 then (x ++ [0], c + 1)
-                                                                                                                  else (x ++ [applyRice (args !! c1 !! c) $ distms ys], c + 1)
-                                                                                                                    ) ([], 0) di in Data.List.map (max 0) (fst r) 
-        applyJack (a, b, c) x = jackFunc a b c x
-        applyRice (a, b, c) x = riceFunc a b c x
+        hitReleasesHolds = fst $ Data.List.foldl (\((x, xx), c) y -> case y of
+          Nothing          -> ((x, xx), c + 1)
+          Just HitNote     -> ((x ++ [c], xx), c + 1)
+          Just ReleaseNote -> ((x ++ [c], xx), c + 1)
+          otherwise        -> ((x, xx ++ [c]), c + 1)
+            ) (([], []), 0) $ notes currChord
+
+        getHoldDiff (x, z) = Data.List.map (\zs -> Data.List.map (\xs -> applyHold zs xs) x) z
+        applyHold c1 c = let (a, _, _) = holdArgs !! c1 !! c in a
+
+        getNotesDiff arr = Data.List.map (diffs) arr
+        diffs c1 = let r = Data.List.foldl (applyFunc c1) ([], 0) di in Data.List.map (max 0) (fst r) 
+        applyFunc c1 (x, c) (y, ys) = let t = tryApply c1 c y; ts = tryApply c1 c ys in (x ++ [if t < 0 then (Prelude.max ts 0) else t], c + 1)
+
+        tryApply c1 c y | y < 0                = -1
+                        | c1 == c              = let (a1, a2, a3) = (argsDecision c1 c y) !! c1 !! c in jackFunc a1 a2 a3 $ distms y
+                        | distms y < threshold = -1
+                        | otherwise            = let (a1, a2, a3) = (argsDecision c1 c y) !! c1 !! c in riceFunc a1 a2 a3 $ distms y
+
+        
+        argsDecision c1 c y = let t1 = (notes currChord) !! c; t = (notes $ chords !! y) !! c
+                                in case t1 of
+                                        Just HitNote -> if t == Just HitNote then hitHitArgs else hitRelArgs
+                                        otherwise    -> if t == Just HitNote then relHitArgs else relRelArgs
+
         distms ind = (time $ chords !! curr) - (time $ chords !! ind)
