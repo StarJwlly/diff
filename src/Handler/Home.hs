@@ -12,7 +12,7 @@ import Text.Julius (RawJS (..))
 -- Define our data that will be used for creating the form.
 data FileForm = FileForm
     { file1Info :: FileInfo
-    , file2Info :: FileInfo
+    , file2Info :: Maybe FileInfo
     }
 
 -- This is a handler function for the GET request method on the HomeR
@@ -33,9 +33,9 @@ getHomeR = do
         let (commentFormId, commentTextareaId, commentListId) = commentIds
         aDomId <- newIdent
         setTitle "Home"
-        $(widgetFile "homepage")
-
-postHomeR :: Handler Html
+        $(widgetFile "homepage") 
+ 
+postHomeR :: Handler Html 
 postHomeR = do
     ((result, formWidget), formEnctype) <- runFormPost sampleForm
     let handlerName = "postHomeR" :: Text
@@ -53,7 +53,7 @@ postHomeR = do
 sampleForm :: Form FileForm
 sampleForm = renderBootstrap3 BootstrapBasicForm $ FileForm
     <$> fileAFormReq "Choose a .osu file"
-    <*> fileAFormReq "Choose a difficulty file"
+    <*> aopt fileField "Choose a difficulty file (dont insert to use the default values)" Nothing
 
 commentIds :: (Text, Text, Text)
 commentIds = ("js-commentForm", "js-createCommentTextarea", "js-commentList")

@@ -5,7 +5,7 @@
                 <form .form-horizontal method=post action=@{HomeR}#forms enctype=#{formEnctype}>
                     ^{formWidget}
 
-                    <button .btn.btn-primary type="submit">
+                    <button .btn.btn-primary.pull-right type="submit">
                         Go!
 
 
@@ -13,7 +13,7 @@
             <div .bs-callout.bs-callout-info.upload-response>
 
                 $maybe (FileForm f1 f2) <- submission
-                    Your file1 type is <em>#{fileContentType f1}</em>. <br> Your file2 type is <em>#{fileContentType f2}</em>
+                    Your file1 type is <em>#{fileContentType f1}</em>. 
 
                 $nothing
                     File upload result will be here...
